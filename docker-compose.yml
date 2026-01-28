@@ -1,0 +1,28 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: next-auth-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: nextpassword
+      POSTGRES_DB: next-auth-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  
+  app:
+    build: .
+    container_name: next-app
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:nextpassword@db:5432/next-auth-db?schema=public"
+      AUTH_SECRET: ${AUTH_SECRET}
+    depends_on:
+      - db
+  
+volumes:
+  pgdata:

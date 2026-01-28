@@ -1,28 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { prisma } from "@/lib/db";
-import { VerificationToken, ResetToken, TwoFactorToken, Prisma } from "@prisma/client";
-import { getOperationFunctions } from "../utils";
-
-interface TokenDelegate {
-    create(args: any): Promise<any>,
-    findUnique(args: any): Promise<any>,
-    findFirst(args: any): Promise<any>,
-    delete(args: any): Promise<any>,
-    deleteMany(args: any): Promise<Prisma.BatchPayload>,
-}
-
-interface TokenMap {
-    verification: VerificationToken;
-    twoFactor: TwoFactorToken;
-    reset: ResetToken;
-}
-
-export type TokenType = keyof TokenMap;
-export type Token = VerificationToken | ResetToken | TwoFactorToken;
+import { getOperationFunctions } from "@/lib/utils";
+import { VerificationToken, TokenType, Prisma } from "@prisma/client";
 
 const { success, error } = getOperationFunctions<{ 
-    token: TokenMap[TokenType] | null,
+    token: VerificationToken,
     raw?: string,
 }>();
 
@@ -30,81 +13,93 @@ export default class TokenService {
     private static TWO_FACTOR_TOKEN_LIFETIME_MIN = 5;
     private static TOKEN_LIFETIME_MIN = 60;
 
-    private static _modelsMap: Record<TokenType, TokenDelegate> = {
-        verification: prisma.verificationToken,
-        reset: prisma.resetToken,
-        twoFactor: prisma.twoFactorToken
-    };
+    public static async generateToken(
+        type: TokenType, 
+        email: string, 
+        payload: Record<string, unknown> | null = null) {
+            try {
+                const existingToken = await this.getTokenByEmail(type, email);
 
-    public static async generateToken<T extends TokenType>(type: T, email: string) {
-        const model = this.getModel(type);
+                if (existingToken.data?.token)
+                    await prisma.verificationToken.deleteMany({
+                        where: { email, type }
+                    });
+                
+                const { raw, encrypted } = this.generateTokenValues(type);
+                const expires = this.generateExpiresTime(type);
+                const dbToken = await prisma.verificationToken.create({
+                    data: {
+                        email,
+                        token: encrypted,
+                        expires,
+                        type,
+                        payload: payload as Prisma.InputJsonValue
+                    }
+                });
 
-        try {
-            await model.deleteMany({ where: { email } });
+                console.log("Token generation", { raw, encrypted, expires });
 
-            const { raw, encrypted } = TokenService.generateTokenValues(type);
-            const expires = TokenService.generateExpiresTime(type);
-
-            const dbToken = await model.create({
-                data: { email, token: encrypted, expires }
-            });
-
-            return success("", { 
-                token: dbToken as TokenMap[T], raw 
-            });
-        }
-        catch {
-            return error("Error generating token!");
-        }
+                return success("Token created", {
+                    token: dbToken,
+                    raw
+                });
+            } catch(e) {
+                console.error(`FULL ERROR: ${e}`);
+                return error("Failed to generate token");
+            }
     }
 
-    public static async getTokenByEmail<T extends TokenType>(type: T, email: string) {
+    public static async getTokenByEmail(type: TokenType, email: string) {
         try {
-            const dbToken = await this.getModel(type)
-            .findFirst({ where: { email }}) as TokenMap[T] | null;
+            const dbToken = await prisma.verificationToken
+                .findFirst({ where: { type, email }});
 
-            return success("Token founded!", {
+            if (!dbToken || dbToken.type !== type)
+                return error("Token not found!");
+
+            return success("Token found by email!", {
                 token: dbToken,
             });
         } catch {
-            return error("Token not founded!", {
-                token: null
-            });
+            return error("Token not founded!");
         }
     }
 
-    public static async getTokenByValue<T extends TokenType>(type: T, value: string) {
+    public static async getTokenByValue(type: TokenType, value: string) {
         try {
-            const isTwoFactor = type === "twoFactor";
+            const isTwoFactor = type === "TWO_FACTOR_AUTH";
 
             const searchValue = isTwoFactor 
                 ? crypto.createHash("sha256").update(value).digest("hex") 
                 : value;
                 
-            const dbToken = await this.getModel(type).findUnique({
+            const dbToken = await prisma.verificationToken.findUnique({
                 where: { token: searchValue }
-            }) as TokenMap[T] | null;
+            });
+
+            if (!dbToken || dbToken.type !== type)
+                return error("Token not found");
 
             return success("Token founded by value!", {
                 token: dbToken,
                 raw: value
-            })
-        } catch (err) {
-            return error("Token not found by value!");
+            });
+        } catch {
+            return error("Token lookup error!");
         }
     }
 
-    public static async deleteToken<T extends TokenType>(type: T, id: string) {
+    public static async deleteToken(id: string) {
         try {
-            await this.getModel(type).delete({
+            await prisma.verificationToken.delete({
                 where: {
                     id
                 }
             });
 
-            return true;
-        } catch (error) {
-            return false;
+            return success(`${id} token deleted successfully`);
+        } catch {
+            return error(`${id} token deletion error`);
         }
     }
 
@@ -112,22 +107,18 @@ export default class TokenService {
         return new Date(expires) < new Date();
     }
 
-    private static getModel(type: TokenType): TokenDelegate {
-        return this._modelsMap[type];
-    }
-
     private static generateExpiresTime(type: TokenType) : Date {
-        const isTwoFactor = type === "twoFactor";
+        const isTwoFactor = type === "TWO_FACTOR_AUTH";
         const ms_in_minute = 60 * 1000;
 
-        const min = isTwoFactor ? TokenService.TWO_FACTOR_TOKEN_LIFETIME_MIN : TokenService.TOKEN_LIFETIME_MIN;
+        const min = isTwoFactor ? this.TWO_FACTOR_TOKEN_LIFETIME_MIN : this.TOKEN_LIFETIME_MIN;
         const ms = min * ms_in_minute;
 
         return new Date(Date.now() + ms);
     }
 
     private static generateTokenValues(type: TokenType) : { raw: string, encrypted: string } {
-        const isTwoFactor = type === "twoFactor";
+        const isTwoFactor = type === "TWO_FACTOR_AUTH";
 
         const raw = isTwoFactor 
             ? crypto.randomInt(100_000, 1_000_000).toString() 

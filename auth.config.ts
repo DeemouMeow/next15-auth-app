@@ -21,10 +21,19 @@ export default {
                     const { data } = await UserService.validateUserCredentials(email, password);
                     const user = data?.user;
                     
-                    if (!user)
+                    if (!user || !user.password)
                         return null;
-
-                    return user;
+                    
+                    return {
+                        id: user.id,
+                        email: user.email,
+                        role: user.role,
+                        emailVerified: user.emailVerified ?? undefined,
+                        name: user.name ?? undefined,
+                        image: user.image ?? undefined,
+                        isTwoFactorEnabled: user.isTwoFactorEnabled,
+                        isOAuth: false,
+                    };
                 }
 
                 return null;

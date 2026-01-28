@@ -5,78 +5,87 @@ import { getSessionUser } from "@/lib/auth";
 import UserService from "@/lib/services/user-service";
 import { type SettingsSchemaType } from "@/schemas/settings";
 import { success, error } from "@/lib/utils";
-import { sendVerificationEmail } from "./mail";
-import TokenService from "./services/token-servise";
+import { sendVerificationEmail, generateEmailChangeRequest } from "@/lib/mail";
+import { UserSettingsUpdate } from "@/lib/services/types/user";
 
 export const settings = async (values: SettingsSchemaType) => {
     const user = await getSessionUser();
 
-    if (!user)
+    if (!user || !user.email)
         return error("Unauthorized");
     
-    const payload: any = { };
+    const payload: Partial<UserSettingsUpdate> = { };
 
-    Object.keys(values).forEach(key  => {
-        const typedSettingsKey = key as keyof SettingsSchemaType;
-        const typedUserKey = key as keyof typeof user;
+    if (values.email && values.email !== user.email) {
+        const userGetRes = await UserService.getUserByEmail(values.email);
+        const userGetData = userGetRes.data;
+        const user = userGetData?.user;
 
-        const settingsValue = values[typedSettingsKey];
-        const userValue = user[typedUserKey];
-        
-        if (typedSettingsKey === "repeatPassword")
-            return;
+        if (user)
+            return error("Email is already in use");
+    }
 
-        if (typedSettingsKey === "password") {
-            if (!user.isOAuth && settingsValue) {
-                payload[typedSettingsKey] = settingsValue;
-            }
-        }
+    if (values.name && values.name !== user.name)
+        payload.name = values.name;
 
-        const updateCondition = userValue !== undefined && userValue !== settingsValue;
+    const password = values.password;
 
-        if (updateCondition) {
-            payload[typedSettingsKey] = settingsValue;
-        }
-    });
+    if (password) {
+        const { success: isEquals } = await UserService.comparePassword(user.email, password);
+
+        if (isEquals)
+            return error("Password must be different!");
+
+        payload.password = values.password;
+    }
+
+    if (values.isTwoFactorEnabled !== user.isTwoFactorEnabled) {
+        payload.isTwoFactorEnabled = values.isTwoFactorEnabled;
+    }
 
     if (Object.keys(payload).length === 0)
         return success("You have change nothing!");
 
-    const res = await UserService.updateUserByID(user.id, payload);
+    
+    let mailMessage = '';
 
-    if (!res.success) {
-        return error(res.message);
+    const settingsEmail = values.email;
+
+    if (settingsEmail && settingsEmail !== user.email) {
+        const mailSendRes = await sendVerificationEmail(settingsEmail);
+
+        if (!mailSendRes.success)
+            return error("Unable to send verification email!");
+
+        const mailRequestGenerationRes = await generateEmailChangeRequest(user.id, user.email, settingsEmail);
+
+        if (!mailRequestGenerationRes.data)
+            return error("Unable to send email change request!");
+
+        mailMessage = "Confiramtion mail send to your new mailbox!";
     }
 
-    const { password, ...sessionUpdate } = payload;
+    const updateRes = await UserService.updateUser(user.email, {
+        ...payload
+    });
 
+    if (!updateRes.success)
+        return error("Unable to upadte user data!\n", updateRes.message);
+    
     await update({
         user: {
-            ...sessionUpdate
+            name: payload.name || user.name,
+            isTwoFactorEnabled: payload.isTwoFactorEnabled !== undefined 
+                ? payload.isTwoFactorEnabled 
+                : user.isTwoFactorEnabled,
         }
     });
 
-    if (sessionUpdate.email) {
-        const email = sessionUpdate.email;
+    const successMessage = "Info Updated Successfully!" + (mailMessage ? `\n${mailMessage}` : "");
 
-        const tokenGenerationRes = await TokenService.generateToken("verification", email);
-        const generationData = tokenGenerationRes.data;
-
-        if (!tokenGenerationRes.success || !generationData)
-            return error(tokenGenerationRes.message);
-
-        await sendVerificationEmail(sessionUpdate.email, generationData.raw || "");
-
-        return success("Verification Mail was sent to your mailbox!", {
-            updated: {
-                ...sessionUpdate
-            }
-        });
-    }
-
-    return success("Info Updated Successfully!", {
+    return success(successMessage, {
         updated: {
-            ...sessionUpdate
+            payload
         }
     });
-}
+};

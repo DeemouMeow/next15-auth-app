@@ -22,7 +22,7 @@ const TwoFactorField = () => {
                     <FormItem className="flex flex-col items-center justify-center gap-y-4">
                         <FormLabel>Two Factor Code</FormLabel>
                         <FormControl>
-                            <TwoFactorInput {...field}/>
+                            <TwoFactorInput maxLength={6} {...field}/>
                         </FormControl>
                     </FormItem>
                 )

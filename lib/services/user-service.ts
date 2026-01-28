@@ -1,13 +1,19 @@
-import { type DatabaseUser } from "next-auth";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { error, success } from "@/lib/utils";
+import { UserCreationParams, UserFullUpdateInput } from "@/lib/services/types/user";
 
-export interface UserCreationParams
-{
-    name: string,
-    password: string,
-    email: string
+function normalizeUpdatePayload<T extends object>(data: T) : Partial<T> {
+    const accumulator: Partial<T> = {};
+
+    const normalized = Object.entries(data).reduce((acc, [key, value]) => {
+        if (value !== null && value !== "")
+            return { ...acc, [key]: value };
+        
+        return acc;
+    }, accumulator);
+
+    return normalized;
 };
 
 export default class UserService 
@@ -62,6 +68,28 @@ export default class UserService
         }
     }
 
+    public static async getUserById(id: string)
+    {
+        try 
+        {
+            const candidate = await prisma.user.findUnique({
+                where: {
+                    id,
+                }
+            });
+
+            return success("User found by email!", {
+                user: candidate
+            });
+        } 
+        catch 
+        {
+            return error("User not found by email!", {
+                user: null
+            })
+        }
+    }
+
     public static async getUserByEmail(email: string)
     {
         try 
@@ -73,7 +101,7 @@ export default class UserService
             });
 
             return success("User found by email!", {
-                user: candidate as DatabaseUser
+                user: candidate
             });
         } 
         catch 
@@ -84,65 +112,36 @@ export default class UserService
         }
     }
 
-    public static async updateUserByID(id: string, data: any) {
+    public static async updateUser(email: string, data: UserFullUpdateInput, dataEmailChecked: boolean = false) {
         try {
-            const finalPayload = { ...data };
+            const normalized = normalizeUpdatePayload(data);
 
-            if (data.password) 
+            if (normalized.email && typeof normalized.email === "string") {
+                const emailVerified = data.emailVerified;
+
+                normalized.emailVerified = emailVerified 
+                    && (emailVerified instanceof Date 
+                    || typeof emailVerified === "string") ? data.emailVerified : null;
+            }
+
+            if (normalized.password && typeof normalized.password === "string")
             {
-                const hashedPassword = await UserService.hashPassword(data.password)
+                const unhashed = normalized.password;
+                const hashed = await UserService.hashPassword(unhashed);
 
-                finalPayload.password = hashedPassword;
+                normalized.password = hashed;
             }
 
-            if (data.email) {
-                const hasCandidate = !!(await UserService.getUserByEmail(data.email)).data?.user;
-
-                if (hasCandidate)
-                    return error("Email is already in use!");
-
-                finalPayload.emailVerified = null;
-            }
-
-            const updatedUser = await prisma.user.update({
-                where: { id },
-                data: finalPayload
+            const updated = await prisma.user.update({
+                where: { email },
+                data: normalized
             });
 
             return success("User updated successfully!", {
-                user: updatedUser
+                user: updated
             });
-        }
-        catch (err)
-        {
-            return error("Error occured while updating user!");
-        }
-    }
-
-    public static async updateUserByEmail(email: string, data: any) 
-    {
-        try {
-            const finalPayload = { ...data };
-
-            if (data.password) 
-            {
-                const hashedPassword = await UserService.hashPassword(data.password)
-                
-                finalPayload.password = hashedPassword;
-            }
-
-            const updatedUser = await prisma.user.update({
-                where: { email },
-                data: finalPayload
-            });
-
-            return success("User data Updated!", {
-                user: updatedUser
-            });
-        }
-        catch (err)
-        {
-            return error("Error occured while updating user!");
+        } catch {
+            return error("User update failed!");
         }
     }
 
@@ -170,6 +169,24 @@ export default class UserService
         {
             return error("Validation error occured!");
         }
+    }
+
+    public static async comparePassword(email: string, password: string) {
+        if (!email)
+            return error("Email is not provided");
+        
+        const res = await UserService.getUserByEmail(email);
+
+        if (!res.success || !res?.data?.user?.password)
+            return error(res.message);
+
+        const hashed = res.data.user.password;
+        const compareRes = await bcrypt.compare(password, hashed);
+
+        if (compareRes)
+            return success("Passwords match!");
+        else
+            return error("Pusswords do not match!");
     }
 
     private static async hashPassword(password: string)

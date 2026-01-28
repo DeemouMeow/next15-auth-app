@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Form } from "@/components/ui/form";
 import FormInput from "@/components/forms/common/form-input";
-import FormCheckbox from "@/components/forms/common/form-checkbox";
 import { Button } from "@/components/ui/button";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { settings } from "@/lib/settings";
@@ -51,7 +50,10 @@ const SettingsForm = () => {
                 form.resetField("repeatPassword");
             }
 
-            res.success ? setSuccess(res.message) : setError(res.message);
+            if (res.success)
+                setSuccess(res.message)
+            else
+                setError(res.message);
         });
     };
     

@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/hooks/hooks";
 const SettingsPage = () => {
     const currentUser = useCurrentUser();
 
+
     return (
         <SettingsCard key={currentUser?.id}/>
     );

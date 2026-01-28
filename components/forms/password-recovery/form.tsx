@@ -35,7 +35,10 @@ const PasswordRecoveryForm = ({ resetToken }: PasswordRecoveryFormProps) => {
         
         resetPassword(resetToken || "", values.confirmPassword)
             .then(data => {
-                data.success ? setSuccess(data.message) : setError(data.message);
+                if (data.success)
+                    setSuccess(data.message) 
+                else 
+                    setError(data.message);
             })
             .catch(() => setError("Unable to reset password!"));
     };

@@ -6,34 +6,49 @@ import { CircleLoader } from "react-spinners";
 import { authRoutes } from "@/lib/routes";
 import { verifyEmailVerificationToken } from "@/lib/services/verification-service";
 import { CardWrapper, FromError, FromSuccess } from "@/components/index";
+import { useSession } from "next-auth/react";
 
 const EmailVerificationForm = () => {
     const [error, setError] = useState<string | undefined>();
     const [success, setSuccess] = useState<string | undefined>();
+    const { update } = useSession();
 
     const searchParams = useSearchParams();
 
     const token = searchParams.get("token");
 
-    const onSubmit = useCallback(() => {
+    const onSubmit = useCallback(async () => {
         if (!token) {
             setError("No token founded!");
 
             return;
         }
 
-        verifyEmailVerificationToken(token)
-            .then(data => {
-                data.success ? setSuccess(data.message) : setError(data.message);
-            })
-            .catch(() => {
-                setError("Something went wrong!");
-            });
+        const verificationRes = await verifyEmailVerificationToken(token);
+            // .then(data => {
+            //     if (data.success) {
+            //         setSuccess(data.message) 
+
+            //     }
+            //     else 
+            //         setError(data.message);
+            // })
+            // .catch((reason) => {
+            //     setError(reason);
+            // });
+
+        if (verificationRes.success) {
+            setSuccess(verificationRes.message);
+
+            await update();
+        }
+        else
+            setError(verificationRes.message);
     }, [token]);
 
     useEffect(() => {
         onSubmit();
-    }, []);
+    }, [onSubmit]);
 
     return (
         <CardWrapper

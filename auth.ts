@@ -15,7 +15,15 @@ export const { handlers, signIn, signOut, auth, unstable_update: update } = Next
   },
   events: {
     async linkAccount({ user }) {
-      await UserService.updateUserByID(user.id, { emailVerified: new Date() });
+      console.log("Link account user:", user);
+
+      if (!user.email) {
+        console.log("Unable to link user account");
+
+        return;
+      }
+
+      await UserService.updateUser(user.email, { emailVerified: new Date() });
     }
   },
   callbacks: {
@@ -32,8 +40,6 @@ export const { handlers, signIn, signOut, auth, unstable_update: update } = Next
     async session({ token, session }) {
       if (!session.user)
         return session;
-
-      
 
       return {
         ...session,

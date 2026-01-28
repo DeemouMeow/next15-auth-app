@@ -15,7 +15,7 @@ declare module "next-auth" {
         id: string;
         isTwoFactorEnabled: boolean;
         role: UserRole;
-        isOAuth: boolean;
+        isOAuth?: boolean;
         emailVerified?: Date;
         name?: string | null;
         image?: string;

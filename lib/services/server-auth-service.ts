@@ -6,7 +6,7 @@ import { LoginSchema, RegisterSchema, RegisterSchemaType, type LoginSchemaType }
 import { authRoutes, DEFAULT_LOGIN_REDIRECT } from "@/lib/routes";
 import UserService from "@/lib/services/user-service";
 import TokenService from "@/lib/services/token-servise";
-import { send2FAMail, sendVerificationEmail } from "@/lib/mail";
+import { generateEmailChangeRequest, send2FAMail, sendVerificationEmail } from "@/lib/mail";
 import { generateConfirmation, tryDeleteExistingConfirmationByUserID } from "@/lib/services/two-factor-service";
 import { getOperationFunctions } from "@/lib/utils";
 
@@ -40,16 +40,17 @@ export const credentialsLogin = async (values: LoginSchemaType) => {
     return error("Unable to validate user!");
 
   if (!user.emailVerified) {
-    const { data: existingTokenData } = await TokenService.getTokenByEmail("verification", email);
+    const { data: existingTokenData } = await TokenService.getTokenByEmail("EMAIL_VERIFICATION", email);
     const token = existingTokenData?.token;
 
     if (token && !TokenService.isExpired(token.expires)) {
       return error("Confirm your email by link on your mailbox!");
     }
 
-    const { data: generatedTokenData } = await TokenService.generateToken("verification", email);
+    const generationRes = await TokenService.generateToken("EMAIL_VERIFICATION", email);
+    const generationData = generationRes?.data;
 
-    const raw = generatedTokenData?.raw || "";
+    const raw = generationData?.raw || "";
 
     if (raw) {
       await sendVerificationEmail(email, raw);
@@ -69,7 +70,7 @@ export const credentialsLogin = async (values: LoginSchemaType) => {
         : error("Unable to sent two factor code!");
     }
 
-    const { data } = await TokenService.getTokenByValue("twoFactor", code);
+    const { data } = await TokenService.getTokenByValue("TWO_FACTOR_AUTH", code);
     const token = data?.token;
 
     if (!token) {
@@ -79,7 +80,10 @@ export const credentialsLogin = async (values: LoginSchemaType) => {
     if (TokenService.isExpired(token.expires))
       return error("Code has been expired! Click to \"Resend code\" button");
 
-    await generateConfirmation(existingUser.id);
+    const confirmationRes = await generateConfirmation(existingUser.id);
+
+    if (!confirmationRes?.success)
+      return error(confirmationRes?.message);
   }
 
   try {
@@ -116,19 +120,25 @@ export async function register(values: RegisterSchemaType) {
         return error("Register error occured!");
 
     const { email, password, username } = validatedFields.data;
-
+    
     const result = await UserService.createUser({ email, password, name: username });
 
-    if (!result.success)
+    if (!result.data?.user)
       return error(result.message);
 
-    const { data } = await TokenService.generateToken("verification", email);
-    const raw = data?.raw;
+    const generationRes = await TokenService.generateToken("EMAIL_VERIFICATION", email);
+    const generationData = generationRes?.data;
+    const raw = generationData?.raw;
 
     if (!raw)
-      return error("Unable to sent verification token!");
+      return error("Unable to sent verification token!" + generationRes.message);
 
-    await sendVerificationEmail(email, raw);
+    await generateEmailChangeRequest(result.data.user.id, email, email);
+    const emailSentRes = await sendVerificationEmail(email);
+
+    if (!emailSentRes.success)
+      return error(emailSentRes.message);
+    
     return success("Confirmation email sent");
 };
 

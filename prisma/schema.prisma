@@ -7,7 +7,13 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+}
 
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  TWO_FACTOR_AUTH
+  SETTINGS_UPDATE
 }
 
 enum UserRole {
@@ -57,26 +63,22 @@ model VerificationToken {
   email   String
   token   String @unique
   expires DateTime
+  type    TokenType
+
+  payload Json?
 
   @@unique([email, token])
+  @@index([email, token])
 }
 
-model ResetToken {
-  id      String @id @default(cuid())
-  email   String
-  token   String @unique
-  expires DateTime
-
-  @@unique([email, token])
-}
-
-model TwoFactorToken {
-  id      String @id @default(cuid())
-  email   String
-  token   String @unique
-  expires DateTime
-
-  @@unique([email, token])
+model EmailChangeRequest {
+  id           String @id @default(cuid())
+  user_id      String
+  old_email    String
+  new_email    String
+  expires_at   DateTime
+  
+  @@unique([user_id])
 }
 
 model TwoFactorConfirmation {

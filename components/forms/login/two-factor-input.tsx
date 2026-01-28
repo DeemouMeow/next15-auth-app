@@ -1,14 +1,21 @@
-import { forwardRef } from "react";
+import { forwardRef, ComponentPropsWithoutRef } from "react";
 import { 
     InputOTP, 
     InputOTPGroup,
     InputOTPSlot,
     InputOTPSeparator 
 } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 
-const TwoFactorInput = forwardRef<HTMLInputElement, any>((props, ref) => {
+type TwoFactorInputProps = Omit<ComponentPropsWithoutRef<typeof InputOTP>, "render">;
+
+const TwoFactorInput = forwardRef<HTMLInputElement, TwoFactorInputProps>(({ maxLength = 6, ...props }, ref) => {
     return (
-        <InputOTP maxLength={6} ref={ref} {...props}>
+        <InputOTP 
+            maxLength={maxLength}
+            pattern={REGEXP_ONLY_DIGITS} 
+            ref={ref} 
+            {...props}>
             <InputOTPGroup>
                 <InputOTPSlot index={0}/>
                 <InputOTPSlot index={1}/>

@@ -22,8 +22,7 @@ export const publicRoutes =
 export const protectedRoutes = {
     serverProfile: "/server-profile",
     clientProfile: "/client-profile",
-    settings: "/settings",
-    admin: "/admin"
+    settings: "/settings"
 };
 
 export const authRoutes = 
@@ -31,12 +30,16 @@ export const authRoutes =
     login: "/auth/login",
     register: "/auth/register",
     error: "/auth/error"
-}
+};
 
 export const generateConfirmationLink = (token: string) => {
     return basePath + `${publicRoutes.verification}?token=${token}`;
-}
+};
 
 export const generateResetLink = (resetToken: string) => {
     return basePath + `${publicRoutes.passwordRecovery}?reset-token=${resetToken}`;
+};
+
+export const generateSettingsUpdateConfirmationLink = (token: string) => {
+    return basePath + `${protectedRoutes.settings}?settings-token=${token}`;
 }

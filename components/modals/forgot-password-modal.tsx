@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { FromSuccess } from "@/components/form-messages/form-success";
 import { FromError } from "@/components/form-messages/form-error";
 
-import { sentPasswordResetEmail } from "@/lib/mail";
+import { sendPasswordResetEmail } from "@/lib/mail";
 
 import { useState } from "react";
 
@@ -24,9 +24,12 @@ const ForgotPasswordModal = () => {
         setSuccess("");
         setError("");
 
-        sentPasswordResetEmail(email)
+        sendPasswordResetEmail(email)
             .then(data => {
-                data.success ? setSuccess(data.message) : setError(data.message);
+                if (data.success)
+                    setSuccess(data.message)
+                else 
+                    setError(data.message);
             })
             .catch(() => {
                 setError("Unable to sent email! Check provided email address");

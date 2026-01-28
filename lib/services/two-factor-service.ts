@@ -1,33 +1,30 @@
 import { prisma } from "@/lib/db";
 import { TwoFactorConfirmation } from "@prisma/client";
+import { getOperationFunctions } from "@/lib/utils";
+
+const { success, error } = getOperationFunctions<{
+    confirmation?: TwoFactorConfirmation
+}>();
 
 export const generateConfirmation = async (userId: string) => {
     try {
         await tryDeleteExistingConfirmationByUserID(userId);
 
-        await prisma.twoFactorConfirmation.create({
+        const res = await prisma.twoFactorConfirmation.create({
             data: {
                 userId
             }
         });
-    } catch (error) {
-        throw error;
-    }
-}
 
-export const getConfirmationByUserId = async (userId: string) : Promise<TwoFactorConfirmation | null> => {
-    try {
-        const dbConfirmation = await prisma.twoFactorConfirmation.findUnique({
-            where: { userId }
+        return success("Confirmation created successfully!", {
+            confirmation: res
         });
-
-        return dbConfirmation;
     } catch {
-        return null;
+        error("Error occured while generating two factor confirmation!");
     }
 }
 
-export const tryDeleteExistingConfirmationByUserID = async (id: string) : Promise<boolean> => {
+export const tryDeleteExistingConfirmationByUserID = async (id: string) => {
     try {
         await prisma.twoFactorConfirmation.delete({
             where: {
@@ -35,27 +32,8 @@ export const tryDeleteExistingConfirmationByUserID = async (id: string) : Promis
             }
         });
 
-        return true;
-    } catch (error) {
-        console.error("[Two Factor Service]: tryDeleteExistingConfirmationByUserId error");
-
-        return false;
+        return success("Successfully deleting two factor confirmation!");
+    } catch {
+        return error("Error while deleting two factor confirmation!");
     }
-}
-
-export const tryDeleteExistingConfirmationByID = async (id: string) : Promise<boolean> => {
-    try {
-        await prisma.twoFactorConfirmation.delete({
-            where: {
-                id
-            }
-        });
-        
-        return true;
-    } catch (error) {
-        console.error("[Two Factor Service]: tryDeleteExistingConfirmationByID error");
-
-        return false;
-    }
-
 }

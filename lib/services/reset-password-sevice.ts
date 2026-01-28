@@ -3,11 +3,12 @@
 import TokenService from "@/lib/services/token-servise";
 import UserService from "@/lib/services/user-service";
 import { getOperationFunctions } from "@/lib/utils";
+import { UserController } from "../controllers/user-controller";
 
 const { success, error } = getOperationFunctions();
 
 export default async function resetPassword(resetToken: string, newPassword: string) {
-    const { data: tokenData } = await TokenService.getTokenByValue("reset", resetToken);
+    const { data: tokenData } = await TokenService.getTokenByValue("PASSWORD_RESET", resetToken);
     const token = tokenData?.token;
 
     if (!token)
@@ -22,14 +23,14 @@ export default async function resetPassword(resetToken: string, newPassword: str
     if (TokenService.isExpired(token.expires))
         return error("Reset Link has been outdated!");
 
-    const updateRes = await UserService.updateUserByEmail(token.email, {
+    const updateRes = await UserController.updateSettings(token.email, {
         password: newPassword
     });
 
     if (!updateRes.success)
         return error(updateRes.message);
 
-    await TokenService.deleteToken("reset", token.id);
+    await TokenService.deleteToken(token.id);
     
     return success("Password changed successfully!");
 }

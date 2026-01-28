@@ -62,7 +62,10 @@ export const LoginForm = ({ showTwoFactor, setShowTwoFactor } : LoginFormProps) 
 
         setShowTwoFactor(result.data?.twoFactor || false);
 
-        result.success ? setSuccess(result.message) : setError(result.message);
+        if (result.success)
+            setSuccess(result.message)
+        else
+            setError(result.message);
     };
 
     return (
