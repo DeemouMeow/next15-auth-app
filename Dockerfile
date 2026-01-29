@@ -1,10 +1,13 @@
 FROM node:20-alpine AS base
 
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
+
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+
+COPY package.json package-lock.json* ./
+RUN npm cache clean --force && \
+    npm install --loglevel error --legacy-peer-deps
 
 FROM base AS builder
 WORKDIR /app
@@ -17,6 +20,8 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV production
+
+COPY --from=builder /app/prisma ./prisma
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next

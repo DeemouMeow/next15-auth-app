@@ -8,7 +8,10 @@ declare module "next-auth" {
 
     
     interface Session {
-        user: SessionUser
+        user: SessionUser & {
+            role: UserRole
+            isTwoFactorEnabled: boolean
+        }
     }
 
     interface User {

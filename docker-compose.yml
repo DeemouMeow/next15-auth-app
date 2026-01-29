@@ -16,11 +16,14 @@ services:
   app:
     build: .
     container_name: next-app
+    env_file:
+      - .env
+      - .env.local
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "postgresql://postgres:nextpassword@db:5432/next-auth-db?schema=public"
-      AUTH_SECRET: ${AUTH_SECRET}
+      - AUTH_TRUST_HOST=true
+      - DATABASE_URL=${DATABASE_URL}
     depends_on:
       - db
   

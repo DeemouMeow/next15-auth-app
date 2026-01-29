@@ -46,8 +46,9 @@ export default class UserService
                 user
             });
         }
-        catch 
+        catch (e)
         {   
+            console.error("[UserService]: createUser |", e);
             return error("User creation error occur!");
         }
     }
